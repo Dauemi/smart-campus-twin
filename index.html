@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Campus Twin</title>
+  <style>
+    body   { font-family: "Segoe UI", sans-serif; background: #eef3f1; color: #12231e; margin: 0; padding: 24px; }
+    h1     { margin: 0 0 4px; }
+    .sub   { color: #566a64; margin: 0 0 20px; }
+    .room  { background: white; border-radius: 14px; padding: 18px; max-width: 640px; }
+    .room h2 { margin: 0; }
+    .tiles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 12px; }
+    .tile  { background: #f4f8f6; border-radius: 10px; padding: 14px; transition: background 0.3s; }
+    .value { font-size: 32px; font-family: Consolas, monospace; }
+    .label { color: #566a64; font-size: 13px; }
+    .tile.alert { background: #fde3df; color: #bf3826; }
+    .status { font-size: 13px; color: #566a64; margin: 14px 0 0; }
+  </style>
+</head>
+<body>
+  <h1>Smart Campus Twin</h1>
+  <p class="sub">Live sensor data from GridSense nodes</p>
+
+  <div class="room">
+    <h2>Energy lab</h2>
+    <div class="tiles">
+      <div class="tile">
+        <div class="value" id="temp">--</div>
+        <div class="label">Air temperature (°C)</div>
+      </div>
+      <div class="tile">
+        <div class="value" id="hum">--</div>
+        <div class="label">Relative humidity (%)</div>
+      </div>
+      <div class="tile" id="co2-tile">
+        <div class="value" id="co2">--</div>
+        <div class="label">CO₂ (ppm)</div>
+      </div>
+      <div class="tile" id="vent-tile">
+        <div class="value" id="vent">--</div>
+        <div class="label">Ventilation</div>
+      </div>
+    </div>
+    <p class="status" id="status">Not connected</p>
+  </div>
+
+    <script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js"></script>
+  <script>
+    // Where to connect (the browser uses WebSocket, so wss:// and port 8884)
+    const BROKER = "wss://broker.hivemq.com:8884/mqtt";
+    const TOPIC  = "gridsense-dauemi/energy-lab/state";
+
+    const status = document.getElementById("status");
+    const client = mqtt.connect(BROKER);
+
+    // 1. When connected: subscribe to our room
+    client.on("connect", () => {
+      status.textContent = "Connected · waiting for data…";
+      client.subscribe(TOPIC);
+    });
+
+    // 2. Every time a message arrives: update the tiles
+    client.on("message", (topic, payload) => {
+      const data = JSON.parse(payload.toString());   // text → JavaScript object
+
+      document.getElementById("temp").textContent = data.temp_C.toFixed(1);
+      document.getElementById("hum").textContent  = data.hum_pct.toFixed(0);
+      document.getElementById("co2").textContent  = data.co2_ppm;
+      document.getElementById("vent").textContent = data.vent_alert ? "BOOST" : "Normal";
+
+      // turn tiles red when the air is bad
+      document.getElementById("co2-tile").classList.toggle("alert", data.co2_ppm > 1000);
+      document.getElementById("vent-tile").classList.toggle("alert", data.vent_alert === 1);
+
+      status.textContent = "Last update: " + new Date().toLocaleTimeString();
+    });
+
+    // 3. If something goes wrong, say so
+    client.on("error", (err) => { status.textContent = "Error: " + err.message; });
+  </script>
+
+</body>
+</html>
