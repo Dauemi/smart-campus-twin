@@ -13,7 +13,7 @@
     .card   { background: white; border-radius: 14px; padding: 16px; }
 
     /* floor plans */
-    .floors { display: grid; gap: 14px; }
+    .floors { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
     .floor h3 { margin: 0 0 6px; font-size: 14px; color: #566a64; }
     .floor svg { width: 100%; height: auto; display: block; }
     .room-shape { stroke: #ffffff; stroke-width: 2; cursor: pointer; transition: fill 0.4s; }
@@ -35,6 +35,7 @@
     #chart { width: 100%; height: 140px; background: #f4f8f6; border-radius: 10px; display: block; margin-top: 6px; }
     .status { font-size: 13px; color: #566a64; margin: 12px 0 0; }
     .panel.offline { opacity: 0.45; }
+    .panel { position: sticky; top: 16px; }
 
     @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
   </style>
