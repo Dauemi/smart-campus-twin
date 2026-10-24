@@ -5,125 +5,226 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Smart Campus Twin</title>
   <style>
-    body   { font-family: "Segoe UI", sans-serif; background: #eef3f1; color: #12231e; margin: 0; padding: 24px; }
-    h1     { margin: 0 0 4px; }
-    .sub   { color: #566a64; margin: 0 0 20px; }
-    .room  { background: white; border-radius: 14px; padding: 18px; max-width: 640px; transition: opacity 0.3s; }
-    .room h2 { margin: 0; }
-    .tiles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 12px; }
-    .tile  { background: #f4f8f6; border-radius: 10px; padding: 14px; transition: background 0.3s; }
-    .value { font-size: 32px; font-family: Consolas, monospace; }
+    body    { font-family: "Segoe UI", sans-serif; background: #eef3f1; color: #12231e; margin: 0; padding: 24px; }
+    header  { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-bottom: 16px; }
+    h1      { margin: 0; margin-right: auto; }
+    .pill   { background: white; border-radius: 999px; padding: 5px 12px; font-size: 13px; }
+    .layout { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; align-items: start; }
+    .card   { background: white; border-radius: 14px; padding: 16px; }
+
+    /* floor plans */
+    .floors { display: grid; gap: 14px; }
+    .floor h3 { margin: 0 0 6px; font-size: 14px; color: #566a64; }
+    .floor svg { width: 100%; height: auto; display: block; }
+    .room-shape { stroke: #ffffff; stroke-width: 2; cursor: pointer; transition: fill 0.4s; }
+    .room-shape:hover { stroke: #12231e; }
+    .room-shape.selected { stroke: #0c8770; stroke-width: 4; }
+    .room-name  { font-size: 8px; fill: #12231e; pointer-events: none; }
+    .room-value { font-size: 10px; font-weight: 700; fill: #12231e; pointer-events: none; font-family: Consolas, monospace; }
+    .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: #566a64; margin-top: 12px; }
+    .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -2px; }
+
+    /* room panel (same as v1) */
+    .panel h2 { margin: 0; }
+    .meta  { color: #566a64; font-size: 13px; margin: 2px 0 0; }
+    .tiles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 12px; }
+    .tile  { background: #f4f8f6; border-radius: 10px; padding: 12px; transition: background 0.3s; }
+    .value { font-size: 28px; font-family: Consolas, monospace; }
     .label { color: #566a64; font-size: 13px; }
     .tile.alert { background: #fde3df; color: #bf3826; }
-    .status { font-size: 13px; color: #566a64; margin: 14px 0 0; }
+    #chart { width: 100%; height: 140px; background: #f4f8f6; border-radius: 10px; display: block; margin-top: 6px; }
+    .status { font-size: 13px; color: #566a64; margin: 12px 0 0; }
+    .panel.offline { opacity: 0.45; }
 
-    /* NEW (edit 1): chart + offline styles */
-    .chart-box { margin-top: 16px; }
-    #chart { width: 100%; height: 160px; background: #f4f8f6; border-radius: 10px; display: block; margin-top: 6px; }
-    .room.offline { opacity: 0.45; }
+    @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
-  <h1>Smart Campus Twin</h1>
-  <p class="sub">Live sensor data from GridSense nodes</p>
+  <header>
+    <h1>Smart Campus Twin</h1>
+    <span class="pill" id="clock">Simulated time --:--</span>
+    <span class="pill" id="alerts">-- rooms above 1,000 ppm</span>
+    <span class="pill" id="conn">Connecting…</span>
+  </header>
 
-  <div class="room">
-    <h2>Energy lab</h2>
-    <div class="tiles">
-      <div class="tile">
-        <div class="value" id="temp">--</div>
-        <div class="label">Air temperature (°C)</div>
-      </div>
-      <div class="tile">
-        <div class="value" id="hum">--</div>
-        <div class="label">Relative humidity (%)</div>
-      </div>
-      <div class="tile" id="co2-tile">
-        <div class="value" id="co2">--</div>
-        <div class="label">CO₂ (ppm)</div>
-      </div>
-      <div class="tile" id="vent-tile">
-        <div class="value" id="vent">--</div>
-        <div class="label">Ventilation</div>
+  <div class="layout">
+    <!-- LEFT: the building -->
+    <div class="card">
+      <div class="floors" id="floors"></div>
+      <div class="legend">
+        <span><i style="background:#bfe5c9"></i>Below 800 ppm</span>
+        <span><i style="background:#f7e3a1"></i>800–1,000</span>
+        <span><i style="background:#f8c79a"></i>1,000–1,400</span>
+        <span><i style="background:#f4a99e"></i>Above 1,400</span>
+        <span><i style="background:#dfe5e3"></i>No data / offline</span>
       </div>
     </div>
 
-    <!-- NEW (edit 2): the chart -->
-    <div class="chart-box">
-      <div class="label">CO₂ · last 5 minutes (dashed line = 1,000 ppm limit)</div>
-      <svg id="chart" viewBox="0 0 600 160" preserveAspectRatio="none"></svg>
+    <!-- RIGHT: the selected room -->
+    <div class="card panel" id="panel">
+      <h2 id="room-name">--</h2>
+      <p class="meta" id="room-meta">--</p>
+      <div class="tiles">
+        <div class="tile"><div class="value" id="temp">--</div><div class="label">Air temperature (°C)</div></div>
+        <div class="tile"><div class="value" id="hum">--</div><div class="label">Relative humidity (%)</div></div>
+        <div class="tile" id="co2-tile"><div class="value" id="co2">--</div><div class="label">CO₂ (ppm)</div></div>
+        <div class="tile" id="vent-tile"><div class="value" id="vent">--</div><div class="label">Ventilation</div></div>
+      </div>
+      <div class="label" style="margin-top:14px">CO₂ · last 5 minutes (dashed = 1,000 ppm)</div>
+      <svg id="chart" viewBox="0 0 600 140" preserveAspectRatio="none"></svg>
+      <p class="status" id="status">Click a room on the plan</p>
     </div>
-
-    <p class="status" id="status">Not connected</p>
   </div>
 
   <script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js"></script>
   <script>
-    // Where to connect (the browser uses WebSocket, so wss:// and port 8884)
+    // ================= Settings =================
     const BROKER = "wss://broker.hivemq.com:8884/mqtt";
-    const TOPIC  = "gridsense-dauemi/energy-lab/state";
+    const PREFIX = "gridsense-dauemi";
+    const MAX_POINTS = 150;          // chart length (150 × 2 s = 5 min)
+    const OFFLINE_AFTER = 10000;     // ms without data → offline
 
-    const status = document.getElementById("status");
-    const client = mqtt.connect(BROKER);
+    // ================= The building, as data =================
+    // positions in metres on a 30 m × 18 m floor
+    const FLOORS = ["Ground floor", "First floor", "Second floor"];
+    const ROOMS = [
+      { id: "lobby",       name: "Lobby",            floor: 0, x: 0,  y: 0,  w: 10, d: 8  },
+      { id: "cafe",        name: "Café",             floor: 0, x: 10, y: 0,  w: 10, d: 8  },
+      { id: "plant",       name: "Technical room",   floor: 0, x: 20, y: 0,  w: 10, d: 6  },
+      { id: "energy-lab",  name: "Energy lab",       floor: 0, x: 20, y: 6,  w: 10, d: 12 },
+      { id: "hall-a",      name: "Lecture hall A",   floor: 0, x: 0,  y: 8,  w: 20, d: 10 },
+      { id: "c101",        name: "Classroom 101",    floor: 1, x: 0,  y: 0,  w: 10, d: 9  },
+      { id: "c102",        name: "Classroom 102",    floor: 1, x: 0,  y: 9,  w: 10, d: 9  },
+      { id: "library",     name: "Library",          floor: 1, x: 10, y: 0,  w: 12, d: 10 },
+      { id: "meeting",     name: "Meeting room",     floor: 1, x: 22, y: 0,  w: 8,  d: 10 },
+      { id: "open-office", name: "Open office",      floor: 1, x: 10, y: 10, w: 20, d: 8  },
+      { id: "grid-lab",    name: "Smart grid lab",   floor: 2, x: 0,  y: 0,  w: 12, d: 10 },
+      { id: "computer",    name: "Computer lab",     floor: 2, x: 12, y: 0,  w: 10, d: 10 },
+      { id: "server",      name: "Server room",      floor: 2, x: 22, y: 0,  w: 8,  d: 5  },
+      { id: "research",    name: "Research office",  floor: 2, x: 22, y: 5,  w: 8,  d: 5  },
+      { id: "seminar",     name: "Seminar room",     floor: 2, x: 0,  y: 10, w: 18, d: 8  },
+      { id: "staff",       name: "Staff room",       floor: 2, x: 18, y: 10, w: 12, d: 8  },
+    ];
 
-    // NEW (edit 3a): history chart
-    const history = [];          // the last CO2 readings
-    const MAX_POINTS = 150;      // 150 readings × 2 s = 5 minutes
-    let lastMessage = 0;         // time of the last message (ms)
+    // ================= State: the latest data for every room =================
+    const state = {};
+    ROOMS.forEach(r => state[r.id] = { data: null, history: [], last: 0 });
+    let selected = "energy-lab";
 
-    function drawChart() {
-      const W = 600, H = 160, MIN = 400, MAX = 2000;
-      const x = i => i / (MAX_POINTS - 1) * W;          // reading number → horizontal position
-      const y = v => H - (v - MIN) / (MAX - MIN) * H;    // ppm → vertical position (top = high)
+    const isOnline = id => state[id].last && Date.now() - state[id].last < OFFLINE_AFTER;
+
+    function co2Fill(ppm) {
+      if (ppm == null) return "#dfe5e3";   // no data
+      if (ppm < 800)   return "#bfe5c9";   // good
+      if (ppm < 1000)  return "#f7e3a1";   // moderate
+      if (ppm < 1400)  return "#f8c79a";   // high
+      return "#f4a99e";                    // very high
+    }
+
+    // ================= Draw the floor plans once, from the data =================
+    function buildPlans() {
+      const S = 10;   // 10 drawing units per metre
+      document.getElementById("floors").innerHTML = FLOORS.map((floorName, f) => `
+        <div class="floor">
+          <h3>${floorName}</h3>
+          <svg viewBox="-3 -3 306 186">
+            ${ROOMS.filter(r => r.floor === f).map(r => `
+              <g data-id="${r.id}">
+                <rect class="room-shape" id="shape-${r.id}" x="${r.x*S}" y="${r.y*S}" width="${r.w*S}" height="${r.d*S}" rx="4"></rect>
+                <text class="room-name"  x="${r.x*S + 7}" y="${r.y*S + 14}">${r.name}</text>
+                <text class="room-value" id="val-${r.id}" x="${r.x*S + 7}" y="${r.y*S + 28}">--</text>
+              </g>`).join("")}
+          </svg>
+        </div>`).join("");
+
+      // one click listener for the whole plan
+      document.getElementById("floors").addEventListener("click", e => {
+        const g = e.target.closest("g[data-id]");
+        if (g) { selected = g.dataset.id; render(); }
+      });
+    }
+
+    // ================= Update the screen from the state =================
+    function render() {
+      // 1. colour every room
+      let alerts = 0;
+      ROOMS.forEach(r => {
+        const s = state[r.id], online = isOnline(r.id);
+        const ppm = online ? s.data.co2_ppm : null;
+        if (ppm > 1000) alerts++;
+        const shape = document.getElementById("shape-" + r.id);
+        shape.setAttribute("fill", co2Fill(ppm));
+        shape.classList.toggle("selected", r.id === selected);
+        document.getElementById("val-" + r.id).textContent =
+          online ? ppm + " ppm" : (s.last ? "offline" : "--");
+      });
+      document.getElementById("alerts").textContent = alerts + " rooms above 1,000 ppm";
+
+      // 2. fill the side panel for the selected room
+      const room = ROOMS.find(r => r.id === selected), s = state[selected], d = s.data;
+      const online = isOnline(selected);
+      document.getElementById("room-name").textContent = room.name;
+      document.getElementById("room-meta").textContent =
+        FLOORS[room.floor] + " · " + room.w * room.d + " m²" +
+        (d && d.occupied != null ? " · " + d.occupied + " people" : "");
+      document.getElementById("temp").textContent = d ? d.temp_C.toFixed(1) : "--";
+      document.getElementById("hum").textContent  = d ? d.hum_pct.toFixed(0) : "--";
+      document.getElementById("co2").textContent  = d ? d.co2_ppm : "--";
+      document.getElementById("vent").textContent = d ? (d.vent_alert ? "BOOST" : "Normal") : "--";
+      document.getElementById("co2-tile").classList.toggle("alert", !!d && d.co2_ppm > 1000);
+      document.getElementById("vent-tile").classList.toggle("alert", !!d && d.vent_alert === 1);
+      document.getElementById("panel").classList.toggle("offline", !online && s.last > 0);
+      document.getElementById("status").textContent =
+        !s.last ? "Waiting for data from this room…" :
+        online  ? "Last update: " + new Date(s.last).toLocaleTimeString() :
+                  "⚠ Offline · no data for " + Math.round((Date.now() - s.last) / 1000) + " s";
+      drawChart(s.history);
+    }
+
+    function drawChart(history) {
+      const W = 600, H = 140, MIN = 400, MAX = 2000;
+      const x = i => i / (MAX_POINTS - 1) * W;
+      const y = v => H - (Math.min(Math.max(v, MIN), MAX) - MIN) / (MAX - MIN) * H;
       const points = history.map((v, i) => x(i).toFixed(1) + "," + y(v).toFixed(1)).join(" ");
       document.getElementById("chart").innerHTML =
         `<line x1="0" x2="${W}" y1="${y(1000)}" y2="${y(1000)}" stroke="#bf3826" stroke-width="1.5" stroke-dasharray="6 6" vector-effect="non-scaling-stroke"/>` +
         `<polyline points="${points}" fill="none" stroke="#0c8770" stroke-width="2.5" vector-effect="non-scaling-stroke"/>`;
     }
 
-    // NEW (edit 3a): offline watchdog, checks every second
-    setInterval(() => {
-      const silence = Date.now() - lastMessage;
-      if (lastMessage && silence > 10000) {
-        status.textContent = "⚠ Node offline · no data for " + Math.round(silence / 1000) + " s";
-        document.querySelector(".room").classList.add("offline");
-      }
-    }, 1000);
+    // ================= MQTT: one subscription for the whole building =================
+    const conn = document.getElementById("conn");
+    const client = mqtt.connect(BROKER);
 
-    // 1. When connected: subscribe to our room
     client.on("connect", () => {
-      status.textContent = "Connected · waiting for data…";
-      client.subscribe(TOPIC);
+      conn.textContent = "● Connected";
+      client.subscribe(PREFIX + "/#");
     });
 
-    // 2. Every time a message arrives: update the tiles
     client.on("message", (topic, payload) => {
-      const data = JSON.parse(payload.toString());   // text → JavaScript object
+      const parts = topic.split("/");              // ["gridsense-dauemi", "c101", "state"]
+      let msg;
+      try { msg = JSON.parse(payload.toString()); } catch (e) { return; }
 
-      document.getElementById("temp").textContent = data.temp_C.toFixed(1);
-      document.getElementById("hum").textContent  = data.hum_pct.toFixed(0);
-      document.getElementById("co2").textContent  = data.co2_ppm;
-      document.getElementById("vent").textContent = data.vent_alert ? "BOOST" : "Normal";
+      if (parts[1] === "sim") {                    // the simulator's clock
+        document.getElementById("clock").textContent = "Simulated time " + msg.time;
+        return;
+      }
+      const s = state[parts[1]];
+      if (!s) return;                              // a room we don't know
 
-      // turn tiles red when the air is bad
-      document.getElementById("co2-tile").classList.toggle("alert", data.co2_ppm > 1000);
-      document.getElementById("vent-tile").classList.toggle("alert", data.vent_alert === 1);
-
-      // NEW (edit 3b): remember this reading and redraw the chart
-      history.push(data.co2_ppm);
-      if (history.length > MAX_POINTS) history.shift();   // drop the oldest
-      drawChart();
-
-      // NEW (edit 3b): the node is alive
-      lastMessage = Date.now();
-      document.querySelector(".room").classList.remove("offline");
-
-      status.textContent = "Last update: " + new Date().toLocaleTimeString();
+      s.data = msg;
+      s.last = Date.now();
+      s.history.push(msg.co2_ppm);
+      if (s.history.length > MAX_POINTS) s.history.shift();
     });
 
-    // 3. If something goes wrong, say so
-    client.on("error", (err) => { status.textContent = "Error: " + err.message; });
-  </script>
+    client.on("error", err => conn.textContent = "Error: " + err.message);
+    client.on("close", () => conn.textContent = "○ Disconnected");
 
+    // ================= Start =================
+    buildPlans();
+    render();
+    setInterval(render, 500);   // redraw twice a second (also acts as the watchdog)
+  </script>
 </body>
 </html>
