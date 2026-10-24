@@ -194,6 +194,10 @@
     const cv = document.getElementById("c3d");
     const V = { yaw: -0.6, pitch: 0.78, zoom: 1, gap: 9.5 };   // camera: rotation, tilt, zoom; gap between floors (m)
     let hit3d = [], hoverId = null;
+    // slim columns around the edge: every 7.5 m on the long sides, plus mid-points on the short sides
+    const SLIM_COLUMNS = [];
+    for (let x = 0; x <= 30; x += 7.5) SLIM_COLUMNS.push([x, 0], [x, 18]);
+    SLIM_COLUMNS.push([0, 9], [30, 9]);
 
     function shade(hex, f) {          // darken a colour by factor f (for side faces)
       const n = parseInt(hex.slice(1), 16);
@@ -241,14 +245,20 @@
       const paint = faces => faces.sort((a, b) => a.depth - b.depth)              // painter's algorithm
                                   .forEach(fc => fc.col.startsWith("rgba")
                                     ? poly(fc.pp, fc.col, "rgba(150,185,200,0.55)", 1)   // glass: see-through + thin frame
-                                    : poly(fc.pp, shade(fc.col, fc.f)));
+                                    : poly(fc.pp, shade(fc.col, fc.f), "rgba(18,35,30,0.14)", 0.6));   // thin edge line = crisp look
 
+      // soft shadow on the ground under the building
+      ctx.save(); ctx.filter = "blur(14px)";
+      poly([[-1, 1, -1.2], [32, 1, -1.2], [32, 20, -1.2], [-1, 20, -1.2]].map(p => P(...p)), "rgba(18,35,30,0.16)");
+      ctx.restore();
+
+      const zr = 2 * V.gap + 7;   // roof level
       hit3d = [];
       const tags = [];
       for (let f = 0; f < 3; f++) {
         const z0 = f * V.gap;
         // floor slab
-        const slab = []; boxFaces(-0.4, -0.4, 30.8, 18.8, z0 - 0.4, 0.4, "#dfe8e4", "#c3d1cc", slab); paint(slab);
+        const slab = []; boxFaces(-0.4, -0.4, 30.8, 18.8, z0 - 0.4, 0.4, "#f4f6f5", "#dfe5e2", slab); paint(slab);
         // room floors, coloured by the active layer
         ROOMS.filter(r => r.floor === f).forEach(r => {
           const pp = [[r.x, r.y, z0], [r.x + r.w, r.y, z0], [r.x + r.w, r.y + r.d, z0], [r.x, r.y + r.d, z0]].map(p => P(...p));
@@ -267,12 +277,31 @@
         });
         // furniture: desks, chairs, radiators, plants, cabinets (see furnish() below)
         ROOMS.filter(r => r.floor === f).forEach(r => furnish(r, z0, walls, boxFaces));
-        // glass façade around the floor (2.6 m high, see-through)
-        const g = 0.08, gh = 2.6, GLASS = "rgba(190,225,240,0.18)";
+        // glass curtain wall around the floor (2.6 m high, see-through)
+        const g = 0.08, gh = 2.6, GLASS = "rgba(205,228,238,0.16)";
         boxFaces(0, -g, 30, g, z0, gh, GLASS, GLASS, walls);
         boxFaces(0, 18, 30, g, z0, gh, GLASS, GLASS, walls);
         boxFaces(-g, 0, g, 18, z0, gh, GLASS, GLASS, walls);
         boxFaces(30, 0, g, 18, z0, gh, GLASS, GLASS, walls);
+        // anthracite window frames (RAL 7016, the classic European colour):
+        // a vertical mullion every 1.5 m, plus a frame rail along the top
+        const FR = ["#3d4644", "#4b5553"], m = 0.06;
+        for (let x = 0; x <= 30.01; x += 1.5) {
+          boxFaces(x - m / 2, -m, m, m, z0, gh, ...FR, walls);
+          boxFaces(x - m / 2, 18, m, m, z0, gh, ...FR, walls);
+        }
+        for (let y = 1.5; y < 18; y += 1.5) {
+          boxFaces(-m, y - m / 2, m, m, z0, gh, ...FR, walls);
+          boxFaces(30, y - m / 2, m, m, z0, gh, ...FR, walls);
+        }
+        boxFaces(0, -m, 30, m, z0 + gh - 0.08, 0.08, ...FR, walls);
+        boxFaces(0, 18, 30, m, z0 + gh - 0.08, 0.08, ...FR, walls);
+        boxFaces(-m, 0, m, 18, z0 + gh - 0.08, 0.08, ...FR, walls);
+        boxFaces(30, 0, m, 18, z0 + gh - 0.08, 0.08, ...FR, walls);
+        // short slim steel columns linking this floor to the one above (or to the roof)
+        const top = f < 2 ? (f + 1) * V.gap - 0.4 : zr - 0.35;
+        SLIM_COLUMNS.forEach(([cx, cy]) =>
+          boxFaces(cx - 0.11, cy - 0.11, 0.22, 0.22, z0, top - z0, "#eef2f0", "#c9d2ce", walls));
         paint(walls);   // walls and pillars sorted together so near ones hide far ones
         // outline of the selected room
         ROOMS.filter(r => r.floor === f && r.id === selected).forEach(r => {
@@ -281,9 +310,10 @@
         });
       }
 
-      // solar roof above the top floor, carried by slimmer steel posts
-      const zr = 2 * V.gap + 7, panels = [], posts = [];
-      const parapet = [], GL = "rgba(190,225,240,0.22)";
+      // flat roof: white deck carried by the slim columns, glass parapet, solar panels on top
+      const panels = [], posts = [];
+      const deck = []; boxFaces(-0.4, -0.4, 30.8, 18.8, zr - 0.35, 0.35, "rgba(240,244,243,0.30)", "rgba(220,228,225,0.55)", deck); paint(deck);   // translucent, so the top floor stays visible
+      const parapet = [], GL = "rgba(205,228,238,0.22)";
       boxFaces(0, -0.05, 30, 0.1, zr - 0.2, 1.0, GL, GL, parapet);
       boxFaces(0, 17.95, 30, 0.1, zr - 0.2, 1.0, GL, GL, parapet);
       boxFaces(-0.05, 0, 0.1, 18, zr - 0.2, 1.0, GL, GL, parapet);
@@ -293,7 +323,7 @@
         const x = 1.6 + i * 2.75, y = 1.4 + j * 3.3, pts = [[x, y, zr + 0.5], [x + 2.3, y, zr + 0.5], [x + 2.3, y + 1.7, zr], [x, y + 1.7, zr]].map(p => P(...p));
         panels.push({ pts, depth: pts.reduce((a, p) => a + p[2], 0) / 4 });
       }
-      panels.sort((a, b) => a.depth - b.depth).forEach(pn => poly(pn.pts, "rgba(36,72,128,0.88)", "#9fb3cf", 1));
+      panels.sort((a, b) => a.depth - b.depth).forEach(pn => poly(pn.pts, "#25406f", "#c7d3e6", 0.8));
       const rp = P(15, -0.5, zr + 1);
       tag(ctx, rp[0], rp[1], "SOLAR ROOF · 36 kWp");
 
