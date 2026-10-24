@@ -1,0 +1,4 @@
+strategy,room_minutes_above_1000ppm,worst_room_peak_ppm,mean_co2_occupied_ppm,fan_kWh_per_day,heating_kWh_per_day,total_kWh_per_day,energy_vs_normal_pct
+Normal,1803.0,1824.0,768.0,49.2,441.7,490.9,0.0
+Auto (CO2),42.0,1824.0,699.0,56.3,505.8,562.1,14.5
+Always high,0.0,1651.0,561.0,111.9,1004.5,1116.4,127.4

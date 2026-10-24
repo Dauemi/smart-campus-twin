@@ -1,0 +1,17 @@
+element,type,W_per_K,case
+External walls,Fabric,902.9999999999999,Today
+Windows,Fabric,775.5999999999999,Today
+Roof,Fabric,486.0,Today
+Ground floor slab,Fabric,216.0,Today
+Floor-wall junctions,Thermal bridge,230.39999999999998,Today
+Window reveals,Thermal bridge,114.89999999999999,Today
+Roof parapet,Thermal bridge,33.599999999999994,Today
+Ventilation,Ventilation,1652.4,Today
+External walls,Fabric,161.25,Renovated
+Windows,Fabric,332.4,Renovated
+Roof,Fabric,81.0,Renovated
+Ground floor slab,Fabric,216.0,Renovated
+Floor-wall junctions,Thermal bridge,76.80000000000001,Renovated
+Window reveals,Thermal bridge,38.300000000000004,Renovated
+Roof parapet,Thermal bridge,9.600000000000001,Renovated
+Ventilation,Ventilation,413.1,Renovated
