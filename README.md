@@ -14,9 +14,9 @@ Sensor nodes (Arduino) → MQTT broker (Mosquitto) → Web dashboard (3D twin)
 - `docs/` — diagrams and screenshots
 
 ## Progress
-- [x] Week 0: tools set up, MQTT pipeline tested
-- [ ] Sensor node
-- [ ] Live dashboard
+-- [x] Week 0: tools set up, MQTT pipeline tested
+- [x] Sensor node (Wokwi: DHT22, CO₂, alert LED, Wi-Fi, MQTT)
+- [x] Live dashboard (v1: room tiles)
 - [ ] 3D building model
 - [ ] Physics models
 - [ ] Smart grid

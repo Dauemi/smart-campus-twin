@@ -8,7 +8,7 @@
     body   { font-family: "Segoe UI", sans-serif; background: #eef3f1; color: #12231e; margin: 0; padding: 24px; }
     h1     { margin: 0 0 4px; }
     .sub   { color: #566a64; margin: 0 0 20px; }
-    .room  { background: white; border-radius: 14px; padding: 18px; max-width: 640px; }
+    .room  { background: white; border-radius: 14px; padding: 18px; max-width: 640px; transition: opacity 0.3s; }
     .room h2 { margin: 0; }
     .tiles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 12px; }
     .tile  { background: #f4f8f6; border-radius: 10px; padding: 14px; transition: background 0.3s; }
@@ -16,6 +16,11 @@
     .label { color: #566a64; font-size: 13px; }
     .tile.alert { background: #fde3df; color: #bf3826; }
     .status { font-size: 13px; color: #566a64; margin: 14px 0 0; }
+
+    /* NEW (edit 1): chart + offline styles */
+    .chart-box { margin-top: 16px; }
+    #chart { width: 100%; height: 160px; background: #f4f8f6; border-radius: 10px; display: block; margin-top: 6px; }
+    .room.offline { opacity: 0.45; }
   </style>
 </head>
 <body>
@@ -42,10 +47,17 @@
         <div class="label">Ventilation</div>
       </div>
     </div>
+
+    <!-- NEW (edit 2): the chart -->
+    <div class="chart-box">
+      <div class="label">CO₂ · last 5 minutes (dashed line = 1,000 ppm limit)</div>
+      <svg id="chart" viewBox="0 0 600 160" preserveAspectRatio="none"></svg>
+    </div>
+
     <p class="status" id="status">Not connected</p>
   </div>
 
-    <script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js"></script>
+  <script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js"></script>
   <script>
     // Where to connect (the browser uses WebSocket, so wss:// and port 8884)
     const BROKER = "wss://broker.hivemq.com:8884/mqtt";
@@ -53,6 +65,30 @@
 
     const status = document.getElementById("status");
     const client = mqtt.connect(BROKER);
+
+    // NEW (edit 3a): history chart
+    const history = [];          // the last CO2 readings
+    const MAX_POINTS = 150;      // 150 readings × 2 s = 5 minutes
+    let lastMessage = 0;         // time of the last message (ms)
+
+    function drawChart() {
+      const W = 600, H = 160, MIN = 400, MAX = 2000;
+      const x = i => i / (MAX_POINTS - 1) * W;          // reading number → horizontal position
+      const y = v => H - (v - MIN) / (MAX - MIN) * H;    // ppm → vertical position (top = high)
+      const points = history.map((v, i) => x(i).toFixed(1) + "," + y(v).toFixed(1)).join(" ");
+      document.getElementById("chart").innerHTML =
+        `<line x1="0" x2="${W}" y1="${y(1000)}" y2="${y(1000)}" stroke="#bf3826" stroke-width="1.5" stroke-dasharray="6 6" vector-effect="non-scaling-stroke"/>` +
+        `<polyline points="${points}" fill="none" stroke="#0c8770" stroke-width="2.5" vector-effect="non-scaling-stroke"/>`;
+    }
+
+    // NEW (edit 3a): offline watchdog, checks every second
+    setInterval(() => {
+      const silence = Date.now() - lastMessage;
+      if (lastMessage && silence > 10000) {
+        status.textContent = "⚠ Node offline · no data for " + Math.round(silence / 1000) + " s";
+        document.querySelector(".room").classList.add("offline");
+      }
+    }, 1000);
 
     // 1. When connected: subscribe to our room
     client.on("connect", () => {
@@ -72,6 +108,15 @@
       // turn tiles red when the air is bad
       document.getElementById("co2-tile").classList.toggle("alert", data.co2_ppm > 1000);
       document.getElementById("vent-tile").classList.toggle("alert", data.vent_alert === 1);
+
+      // NEW (edit 3b): remember this reading and redraw the chart
+      history.push(data.co2_ppm);
+      if (history.length > MAX_POINTS) history.shift();   // drop the oldest
+      drawChart();
+
+      // NEW (edit 3b): the node is alive
+      lastMessage = Date.now();
+      document.querySelector(".room").classList.remove("offline");
 
       status.textContent = "Last update: " + new Date().toLocaleTimeString();
     });
