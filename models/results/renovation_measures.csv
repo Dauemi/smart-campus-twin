@@ -1,0 +1,9 @@
+measure,detail,invest_kEUR,saved_MWh_yr,saved_CO2_t_yr,bill_saving_kEUR_yr,EUR_per_MWh_saved
+Air-to-water heat pump,Replaces the gas boiler,106.0,148.2,44.3,10.6,36
+Heat recovery ventilation,75% heat recovery,60.0,55.5,13.3,5.7,54
+Car-park solar canopy,+20 kWp,26.0,18.7,1.1,3.9,70
+LED lighting + sensors,"10 -> 4.5 W/m2, 25% less run time",41.0,26.8,1.6,5.4,76
+Roof insulation,Roof U 0.90 -> 0.15,38.0,20.6,4.7,2.3,92
+External wall insulation,Walls U 1.40 -> 0.25,97.0,43.0,9.8,4.7,113
+Battery + smart EV,Self-consumption 85% -> 97%,30.0,4.8,0.3,0.7,316
+Triple-glazed windows,Windows U 2.80 -> 1.20,180.0,25.0,5.7,2.7,361

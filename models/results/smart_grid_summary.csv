@@ -1,0 +1,9 @@
+day,strategy,solar_kWh,self_consumption_pct,self_sufficiency_pct,grid_import_kWh,export_kWh,peak_import_kW,cost_EUR,grid_CO2_kg
+October (cloudy),A. No flexibility,92.0,100.0,13.8,573.5,0.0,62.2,119.84,32.6
+October (cloudy),B. Battery,92.0,100.0,16.5,556.0,0.0,62.2,116.87,31.8
+October (cloudy),C. Smart EV charging,92.0,100.0,13.8,573.5,0.0,46.9,119.84,31.8
+October (cloudy),D. Battery + smart EV,92.0,100.0,16.5,556.0,0.0,46.9,116.87,31.0
+June (sunny),A. No flexibility,272.3,98.6,40.3,397.2,3.9,53.7,81.8,22.5
+June (sunny),B. Battery,272.3,100.0,43.5,375.8,0.0,53.7,78.19,21.5
+June (sunny),C. Smart EV charging,272.3,98.6,40.3,397.2,3.9,33.2,81.8,21.7
+June (sunny),D. Battery + smart EV,272.3,100.0,43.5,375.8,0.0,33.2,78.19,20.7
