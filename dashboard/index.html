@@ -10,9 +10,17 @@
     h1      { margin: 0; margin-right: auto; }
     .pill   { background: white; border-radius: 999px; padding: 5px 12px; font-size: 13px; }
     .layout { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; align-items: start; }
-    .card   { background: white; border-radius: 14px; padding: 16px; }
+    .card   { background: white; border-radius: 14px; padding: 16px; min-width: 0; }
 
-    /* floor plans */
+    /* toolbar */
+    .toolbar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-bottom: 12px; }
+    .seg { display: inline-flex; background: #f0f4f2; border-radius: 9px; padding: 3px; }
+    .seg button { border: 0; background: none; padding: 6px 12px; border-radius: 7px; cursor: pointer; font: inherit; font-size: 13px; color: #566a64; }
+    .seg button.on { background: white; color: #12231e; font-weight: 600; box-shadow: 0 1px 3px rgb(0 0 0 / .12); }
+    .hint { font-size: 12px; color: #566a64; }
+    [hidden] { display: none !important; }   /* make 'hidden' win over display:grid */
+
+    /* 2D floor plans */
     .floors { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
     .floor h3 { margin: 0 0 6px; font-size: 14px; color: #566a64; }
     .floor svg { width: 100%; height: auto; display: block; }
@@ -21,10 +29,17 @@
     .room-shape.selected { stroke: #0c8770; stroke-width: 4; }
     .room-name  { font-size: 8px; fill: #12231e; pointer-events: none; }
     .room-value { font-size: 10px; font-weight: 700; fill: #12231e; pointer-events: none; font-family: Consolas, monospace; }
+
+    /* 3D view */
+    #view3d { position: relative; height: 680px; }
+    #c3d { width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
+    #c3d.dragging { cursor: grabbing; }
+
     .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: #566a64; margin-top: 12px; }
     .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -2px; }
 
-    /* room panel (same as v1) */
+    /* room panel */
+    .panel { position: sticky; top: 16px; }
     .panel h2 { margin: 0; }
     .meta  { color: #566a64; font-size: 13px; margin: 2px 0 0; }
     .tiles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 12px; }
@@ -35,9 +50,8 @@
     #chart { width: 100%; height: 140px; background: #f4f8f6; border-radius: 10px; display: block; margin-top: 6px; }
     .status { font-size: 13px; color: #566a64; margin: 12px 0 0; }
     .panel.offline { opacity: 0.45; }
-    .panel { position: sticky; top: 16px; }
 
-    @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+    @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } .panel { position: static; } #view3d { height: 420px; } }
   </style>
 </head>
 <body>
@@ -51,14 +65,23 @@
   <div class="layout">
     <!-- LEFT: the building -->
     <div class="card">
-      <div class="floors" id="floors"></div>
-      <div class="legend">
-        <span><i style="background:#bfe5c9"></i>Below 800 ppm</span>
-        <span><i style="background:#f7e3a1"></i>800–1,000</span>
-        <span><i style="background:#f8c79a"></i>1,000–1,400</span>
-        <span><i style="background:#f4a99e"></i>Above 1,400</span>
-        <span><i style="background:#dfe5e3"></i>No data / offline</span>
+      <div class="toolbar">
+        <div class="seg" id="viewSeg">
+          <button data-view="3d" class="on">3D view</button>
+          <button data-view="plan">Floor plans</button>
+        </div>
+        <div class="seg" id="layerSeg">
+          <button data-layer="spaces" class="on">Spaces</button>
+          <button data-layer="co2">CO₂</button>
+          <button data-layer="temp">Temperature</button>
+          <button data-layer="people">People</button>
+        </div>
+        <span class="hint" id="hint">Drag to rotate · scroll to zoom · click a room</span>
       </div>
+
+      <div id="view3d"><canvas id="c3d"></canvas></div>
+      <div class="floors" id="floors" hidden></div>
+      <div class="legend" id="legend"></div>
     </div>
 
     <!-- RIGHT: the selected room -->
@@ -73,7 +96,7 @@
       </div>
       <div class="label" style="margin-top:14px">CO₂ · last 5 minutes (dashed = 1,000 ppm)</div>
       <svg id="chart" viewBox="0 0 600 140" preserveAspectRatio="none"></svg>
-      <p class="status" id="status">Click a room on the plan</p>
+      <p class="status" id="status">Click a room</p>
     </div>
   </div>
 
@@ -82,52 +105,77 @@
     // ================= Settings =================
     const BROKER = "wss://broker.hivemq.com:8884/mqtt";
     const PREFIX = "gridsense-dauemi";
-    const MAX_POINTS = 150;          // chart length (150 × 2 s = 5 min)
-    const OFFLINE_AFTER = 10000;     // ms without data → offline
+    const MAX_POINTS = 150;
+    const OFFLINE_AFTER = 10000;
 
     // ================= The building, as data =================
-    // positions in metres on a 30 m × 18 m floor
     const FLOORS = ["Ground floor", "First floor", "Second floor"];
     const ROOMS = [
-      { id: "lobby",       name: "Lobby",            floor: 0, x: 0,  y: 0,  w: 10, d: 8  },
-      { id: "cafe",        name: "Café",             floor: 0, x: 10, y: 0,  w: 10, d: 8  },
-      { id: "plant",       name: "Technical room",   floor: 0, x: 20, y: 0,  w: 10, d: 6  },
-      { id: "energy-lab",  name: "Energy lab",       floor: 0, x: 20, y: 6,  w: 10, d: 12 },
-      { id: "hall-a",      name: "Lecture hall A",   floor: 0, x: 0,  y: 8,  w: 20, d: 10 },
-      { id: "c101",        name: "Classroom 101",    floor: 1, x: 0,  y: 0,  w: 10, d: 9  },
-      { id: "c102",        name: "Classroom 102",    floor: 1, x: 0,  y: 9,  w: 10, d: 9  },
-      { id: "library",     name: "Library",          floor: 1, x: 10, y: 0,  w: 12, d: 10 },
-      { id: "meeting",     name: "Meeting room",     floor: 1, x: 22, y: 0,  w: 8,  d: 10 },
-      { id: "open-office", name: "Open office",      floor: 1, x: 10, y: 10, w: 20, d: 8  },
-      { id: "grid-lab",    name: "Smart grid lab",   floor: 2, x: 0,  y: 0,  w: 12, d: 10 },
-      { id: "computer",    name: "Computer lab",     floor: 2, x: 12, y: 0,  w: 10, d: 10 },
-      { id: "server",      name: "Server room",      floor: 2, x: 22, y: 0,  w: 8,  d: 5  },
-      { id: "research",    name: "Research office",  floor: 2, x: 22, y: 5,  w: 8,  d: 5  },
-      { id: "seminar",     name: "Seminar room",     floor: 2, x: 0,  y: 10, w: 18, d: 8  },
-      { id: "staff",       name: "Staff room",       floor: 2, x: 18, y: 10, w: 12, d: 8  },
+      // id, name, floor, position x/y and size w/d in metres, cap = max people
+      { id: "lobby",       name: "Lobby",           floor: 0, x: 0,  y: 0,  w: 10, d: 8,  cap: 15, type: "circulation" },
+      { id: "cafe",        name: "Café",            floor: 0, x: 10, y: 0,  w: 10, d: 8,  cap: 30, type: "social" },
+      { id: "plant",       name: "Technical room",  floor: 0, x: 20, y: 0,  w: 10, d: 6,  cap: 1, type: "services" },
+      { id: "energy-lab",  name: "Energy lab",      floor: 0, x: 20, y: 6,  w: 10, d: 12, cap: 16, type: "lab" },
+      { id: "hall-a",      name: "Lecture hall A",  floor: 0, x: 0,  y: 8,  w: 20, d: 10, cap: 80, type: "teaching" },
+      { id: "c101",        name: "Classroom 101",   floor: 1, x: 0,  y: 0,  w: 10, d: 9,  cap: 30, type: "teaching" },
+      { id: "c102",        name: "Classroom 102",   floor: 1, x: 0,  y: 9,  w: 10, d: 9,  cap: 30, type: "teaching" },
+      { id: "library",     name: "Library",         floor: 1, x: 10, y: 0,  w: 12, d: 10, cap: 40, type: "study" },
+      { id: "meeting",     name: "Meeting room",    floor: 1, x: 22, y: 0,  w: 8,  d: 10, cap: 12, type: "office" },
+      { id: "open-office", name: "Open office",     floor: 1, x: 10, y: 10, w: 20, d: 8,  cap: 24, type: "office" },
+      { id: "grid-lab",    name: "Smart grid lab",  floor: 2, x: 0,  y: 0,  w: 12, d: 10, cap: 20, type: "lab" },
+      { id: "computer",    name: "Computer lab",    floor: 2, x: 12, y: 0,  w: 10, d: 10, cap: 28, type: "teaching" },
+      { id: "server",      name: "Server room",     floor: 2, x: 22, y: 0,  w: 8,  d: 5,  cap: 0, type: "services" },
+      { id: "research",    name: "Research office", floor: 2, x: 22, y: 5,  w: 8,  d: 5,  cap: 8, type: "office" },
+      { id: "seminar",     name: "Seminar room",    floor: 2, x: 0,  y: 10, w: 18, d: 8,  cap: 40, type: "teaching" },
+      { id: "staff",       name: "Staff room",      floor: 2, x: 18, y: 10, w: 12, d: 8,  cap: 12, type: "social" },
     ];
 
-    // ================= State: the latest data for every room =================
+    // ================= State =================
     const state = {};
     ROOMS.forEach(r => state[r.id] = { data: null, history: [], last: 0 });
     let selected = "energy-lab";
-
+    let viewMode = "3d";
+    let layer = "spaces";
     const isOnline = id => state[id].last && Date.now() - state[id].last < OFFLINE_AFTER;
 
-    function co2Fill(ppm) {
-      if (ppm == null) return "#dfe5e3";   // no data
-      if (ppm < 800)   return "#bfe5c9";   // good
-      if (ppm < 1000)  return "#f7e3a1";   // moderate
-      if (ppm < 1400)  return "#f8c79a";   // high
-      return "#f4a99e";                    // very high
+    // ================= Layers: what colour and text each room gets =================
+    // room-use colours for the "Spaces" layer
+    const SPACE_COLORS = { teaching: "#f3e2a8", lab: "#bfe6d6", office: "#d8d2f0", study: "#cfe7b9", social: "#f6cdb6", circulation: "#e3e8e6", services: "#c5d3df" };
+    const SPACE_NAMES  = { teaching: "Teaching", lab: "Laboratory", office: "Office", study: "Study", social: "Social", circulation: "Circulation", services: "Services" };
+    const LAYERS = {
+      spaces: { legend: Object.keys(SPACE_COLORS).map(k => [SPACE_COLORS[k], SPACE_NAMES[k]]) },
+      co2:    { legend: [["#bfe5c9","Below 800 ppm"],["#f7e3a1","800–1,000"],["#f8c79a","1,000–1,400"],["#f4a99e","Above 1,400"]] },
+      temp:   { legend: [["#bcd3f0","Below 19 °C"],["#c5e5cc","19–22 °C"],["#f7e3a1","22–25 °C"],["#f4a99e","Above 25 °C"]] },
+      people: { legend: [["#eef2f0","Empty"],["#d6ecf3","Under 30% full"],["#9fd0e3","30–70%"],["#5fa8c9","Over 70% full"]] },
+    };
+    function layerInfo(room) {
+      const s = state[room.id];
+      if (layer === "spaces") return { fill: SPACE_COLORS[room.type], text: isOnline(room.id) ? s.data.co2_ppm + " ppm" : SPACE_NAMES[room.type] };
+      if (!isOnline(room.id)) return { fill: "#dfe5e3", text: s.last ? "offline" : "--" };
+      const d = s.data;
+      if (layer === "temp") {
+        const t = d.temp_C;
+        return { fill: t < 19 ? "#bcd3f0" : t < 22 ? "#c5e5cc" : t < 25 ? "#f7e3a1" : "#f4a99e", text: t.toFixed(1) + " °C" };
+      }
+      if (layer === "people") {
+        if (d.occupied == null) return { fill: "#eef2f0", text: "no sensor" };
+        const ratio = room.cap ? d.occupied / room.cap : 0;
+        return { fill: ratio === 0 ? "#eef2f0" : ratio < 0.3 ? "#d6ecf3" : ratio < 0.7 ? "#9fd0e3" : "#5fa8c9", text: d.occupied + " people" };
+      }
+      const p = d.co2_ppm;
+      return { fill: p < 800 ? "#bfe5c9" : p < 1000 ? "#f7e3a1" : p < 1400 ? "#f8c79a" : "#f4a99e", text: p + " ppm" };
+    }
+    function renderLegend() {
+      document.getElementById("legend").innerHTML =
+        LAYERS[layer].legend.map(([c, t]) => `<span><i style="background:${c}"></i>${t}</span>`).join("") +
+        (layer === "spaces" ? "" : `<span><i style="background:#dfe5e3"></i>No data / offline</span>`);
     }
 
-    // ================= Draw the floor plans once, from the data =================
+    // ================= 2D floor plans =================
     function buildPlans() {
-      const S = 10;   // 10 drawing units per metre
+      const S = 10;
       document.getElementById("floors").innerHTML = FLOORS.map((floorName, f) => `
-        <div class="floor">
-          <h3>${floorName}</h3>
+        <div class="floor"><h3>${floorName}</h3>
           <svg viewBox="-3 -3 306 186">
             ${ROOMS.filter(r => r.floor === f).map(r => `
               <g data-id="${r.id}">
@@ -135,39 +183,246 @@
                 <text class="room-name"  x="${r.x*S + 7}" y="${r.y*S + 14}">${r.name}</text>
                 <text class="room-value" id="val-${r.id}" x="${r.x*S + 7}" y="${r.y*S + 28}">--</text>
               </g>`).join("")}
-          </svg>
-        </div>`).join("");
-
-      // one click listener for the whole plan
+          </svg></div>`).join("");
       document.getElementById("floors").addEventListener("click", e => {
         const g = e.target.closest("g[data-id]");
         if (g) { selected = g.dataset.id; render(); }
       });
     }
 
-    // ================= Update the screen from the state =================
+    // ================= 3D view =================
+    const cv = document.getElementById("c3d");
+    const V = { yaw: -0.6, pitch: 0.78, zoom: 1, gap: 9.5 };   // camera: rotation, tilt, zoom; gap between floors (m)
+    let hit3d = [], hoverId = null;
+
+    function shade(hex, f) {          // darken a colour by factor f (for side faces)
+      const n = parseInt(hex.slice(1), 16);
+      return `rgb(${Math.round(((n >> 16) & 255) * f)},${Math.round(((n >> 8) & 255) * f)},${Math.round((n & 255) * f)})`;
+    }
+
+    function draw3D() {
+      if (viewMode !== "3d") return;
+      const ctx = cv.getContext("2d"), dpr = window.devicePixelRatio || 1;
+      const W = cv.clientWidth, H = cv.clientHeight;
+      if (!W || !H) return;
+      if (cv.width !== Math.round(W * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, W, H);
+
+      // --- the projection: 3D metres -> 2D pixels ---
+      const cy = Math.cos(V.yaw), sy = Math.sin(V.yaw), sp = Math.sin(V.pitch), cp = Math.cos(V.pitch);
+      // fit the whole stack (3 floors + roof) on screen
+      const stackH = 2 * V.gap + 9;   // 3 floors + raised roof
+      const scale = Math.min(W / 42, H / (26 * sp + stackH * cp + 6)) * V.zoom;
+      const zMid = stackH / 2;                       // centre the stack vertically
+      const P = (x, y, z) => {
+        const X = x - 15, Y = y - 9;                          // centre of the 30 x 18 m footprint
+        const xr = X * cy - Y * sy, yr = X * sy + Y * cy;     // 1. rotate around the vertical axis
+        const zz = z - zMid;
+        return [W / 2 + xr * scale,                          // 3. scale + centre
+                H / 2 + (yr * sp - zz * cp) * scale,          // 2. tilt: depth squashed, height lifted
+                yr * cp + zz * sp];                           // depth, for sorting
+      };
+      const poly = (pts, fill, stroke, lw = 1) => {
+        ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.closePath();
+        if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+        if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lw; ctx.stroke(); }
+      };
+      // a box = 5 visible faces, each with a depth for sorting
+      const boxFaces = (x0, y0, w, d, z0, h, top, side, out) => {
+        const x1 = x0 + w, y1 = y0 + d, z1 = z0 + h;
+        const F = (pts, col, f) => { const pp = pts.map(p => P(...p)); out.push({ pp, col, f, depth: pp.reduce((a, p) => a + p[2], 0) / 4 }); };
+        F([[x0,y0,z1],[x1,y0,z1],[x1,y1,z1],[x0,y1,z1]], top, 1);
+        F([[x0,y1,z0],[x1,y1,z0],[x1,y1,z1],[x0,y1,z1]], side, 0.85);
+        F([[x0,y0,z0],[x1,y0,z0],[x1,y0,z1],[x0,y0,z1]], side, 0.95);
+        F([[x1,y0,z0],[x1,y1,z0],[x1,y1,z1],[x1,y0,z1]], side, 0.75);
+        F([[x0,y0,z0],[x0,y1,z0],[x0,y1,z1],[x0,y0,z1]], side, 0.9);
+      };
+      const paint = faces => faces.sort((a, b) => a.depth - b.depth)              // painter's algorithm
+                                  .forEach(fc => fc.col.startsWith("rgba")
+                                    ? poly(fc.pp, fc.col, "rgba(150,185,200,0.55)", 1)   // glass: see-through + thin frame
+                                    : poly(fc.pp, shade(fc.col, fc.f)));
+
+      hit3d = [];
+      const tags = [];
+      for (let f = 0; f < 3; f++) {
+        const z0 = f * V.gap;
+        // floor slab
+        const slab = []; boxFaces(-0.4, -0.4, 30.8, 18.8, z0 - 0.4, 0.4, "#dfe8e4", "#c3d1cc", slab); paint(slab);
+        // room floors, coloured by the active layer
+        ROOMS.filter(r => r.floor === f).forEach(r => {
+          const pp = [[r.x, r.y, z0], [r.x + r.w, r.y, z0], [r.x + r.w, r.y + r.d, z0], [r.x, r.y + r.d, z0]].map(p => P(...p));
+          poly(pp, layerInfo(r).fill, "#ffffff", 1);
+          hit3d.push({ id: r.id, pp });
+          if (showAllLabels || r.id === selected || r.id === hoverId) tags.push({ r, p: P(r.x + r.w / 2, r.y + r.d / 2, z0 + 1.8) });
+        });
+        // low walls around every room (the "cutaway")
+        const walls = [];
+        ROOMS.filter(r => r.floor === f).forEach(r => {
+          const t = 0.15, h = 1.3;
+          boxFaces(r.x, r.y - t / 2, r.w, t, z0, h, "#aebfb9", "#c9d6d1", walls);
+          boxFaces(r.x, r.y + r.d - t / 2, r.w, t, z0, h, "#aebfb9", "#c9d6d1", walls);
+          boxFaces(r.x - t / 2, r.y, t, r.d, z0, h, "#aebfb9", "#c9d6d1", walls);
+          boxFaces(r.x + r.w - t / 2, r.y, t, r.d, z0, h, "#aebfb9", "#c9d6d1", walls);
+        });
+        // furniture: desks, chairs, radiators, plants, cabinets (see furnish() below)
+        ROOMS.filter(r => r.floor === f).forEach(r => furnish(r, z0, walls, boxFaces));
+        // glass façade around the floor (2.6 m high, see-through)
+        const g = 0.08, gh = 2.6, GLASS = "rgba(190,225,240,0.18)";
+        boxFaces(0, -g, 30, g, z0, gh, GLASS, GLASS, walls);
+        boxFaces(0, 18, 30, g, z0, gh, GLASS, GLASS, walls);
+        boxFaces(-g, 0, g, 18, z0, gh, GLASS, GLASS, walls);
+        boxFaces(30, 0, g, 18, z0, gh, GLASS, GLASS, walls);
+        paint(walls);   // walls and pillars sorted together so near ones hide far ones
+        // outline of the selected room
+        ROOMS.filter(r => r.floor === f && r.id === selected).forEach(r => {
+          const zz = z0 + 1.35;
+          poly([[r.x, r.y, zz], [r.x + r.w, r.y, zz], [r.x + r.w, r.y + r.d, zz], [r.x, r.y + r.d, zz]].map(p => P(...p)), null, "#0c8770", 2.5);
+        });
+      }
+
+      // solar roof above the top floor, carried by slimmer steel posts
+      const zr = 2 * V.gap + 7, panels = [], posts = [];
+      const parapet = [], GL = "rgba(190,225,240,0.22)";
+      boxFaces(0, -0.05, 30, 0.1, zr - 0.2, 1.0, GL, GL, parapet);
+      boxFaces(0, 17.95, 30, 0.1, zr - 0.2, 1.0, GL, GL, parapet);
+      boxFaces(-0.05, 0, 0.1, 18, zr - 0.2, 1.0, GL, GL, parapet);
+      boxFaces(29.95, 0, 0.1, 18, zr - 0.2, 1.0, GL, GL, parapet);
+      paint(posts); paint(parapet);
+      for (let j = 0; j < 5; j++) for (let i = 0; i < 10; i++) {
+        const x = 1.6 + i * 2.75, y = 1.4 + j * 3.3, pts = [[x, y, zr + 0.5], [x + 2.3, y, zr + 0.5], [x + 2.3, y + 1.7, zr], [x, y + 1.7, zr]].map(p => P(...p));
+        panels.push({ pts, depth: pts.reduce((a, p) => a + p[2], 0) / 4 });
+      }
+      panels.sort((a, b) => a.depth - b.depth).forEach(pn => poly(pn.pts, "rgba(36,72,128,0.88)", "#9fb3cf", 1));
+      const rp = P(15, -0.5, zr + 1);
+      tag(ctx, rp[0], rp[1], "SOLAR ROOF · 36 kWp");
+
+      // room labels last, so nothing covers them
+      tags.forEach(t => tag(ctx, t.p[0], t.p[1],
+        t.r.id === selected || t.r.id === hoverId ? t.r.name + " · " + layerInfo(t.r).text : t.r.name,
+        t.r.id === selected));
+    }
+
+    const showAllLabels = true;   // a small name tag on every room, like the lecturer's twin
+
+    // ---------- Furniture: each room gets objects that match its use ----------
+    // every object is just a box: (x, y, width, depth, height, top colour, side colour)
+    function furnish(r, z0, out, box) {
+      const add = (x, y, w, d, h, top, side) => box(r.x + x, r.y + y, w, d, z0, h, top, side, out);
+      const DESK = ["#f5f8f7", "#d7e1dd"], CHAIR = ["#5b6fc7", "#46589f"], RAD = ["#f08a3c", "#c96a25"],
+            PLANT = ["#4caf6e", "#2f7a4a"], CAB = ["#55606b", "#3e464f"], SOFA = ["#c9a27e", "#a88462"];
+
+      // orange radiator under the window on the room's front wall (not in service rooms)
+      if (r.type !== "services") add(r.w / 2 - 0.8, 0.25, 1.6, 0.15, 0.6, ...RAD);
+
+      if (r.type === "services") {            // server / plant room: rows of dark cabinets
+        for (let i = 0; i < Math.floor((r.w - 2) / 1.2); i++) add(1 + i * 1.2, 1, 0.8, 1, 2.0, ...CAB);
+        return;
+      }
+      if (r.type === "circulation") {         // lobby: reception desk, sofa, plant
+        add(r.w / 2 - 1.5, r.d / 2 - 0.4, 3, 0.8, 1.1, ...DESK);
+        add(1, r.d - 2, 2.2, 0.9, 0.7, ...SOFA);
+        add(r.w - 1.3, r.d - 1.3, 0.6, 0.6, 1.4, ...PLANT);
+        return;
+      }
+      // desks in a grid, with a chair behind each one
+      const spec = { teaching: [1.4, 0.6, 1.0, 1.3], lab: [3.0, 0.9, 1.2, 1.8], office: [1.6, 0.8, 0.8, 1.4],
+                     study: [1.8, 1.0, 1.2, 1.6], social: [1.0, 1.0, 1.4, 1.6] }[r.type];
+      const [dw, dd, gx, gy] = spec, m = 1.2;
+      const cols = Math.max(1, Math.floor((r.w - 2 * m + gx) / (dw + gx)));
+      const rows = Math.max(1, Math.floor((r.d - 2 * m - 0.6 + gy) / (dd + gy)));
+      const ox = (r.w - (cols * dw + (cols - 1) * gx)) / 2, oy = (r.d - (rows * dd + (rows - 1) * gy)) / 2 + 0.4;
+      let n = 0;
+      for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
+        if (n++ >= 16) break;                 // cap the count so big rooms stay fast
+        const x = ox + i * (dw + gx), y = oy + j * (dd + gy);
+        add(x, y, dw, dd, 0.75, ...DESK);
+        add(x + dw / 2 - 0.25, y + dd + 0.1, 0.5, 0.5, 0.9, ...CHAIR);
+      }
+      add(r.w - 1.1, 0.5, 0.6, 0.6, 1.4, ...PLANT);   // a plant in the corner
+    }
+
+    function tag(ctx, x, y, text, strong) {
+      ctx.font = (strong ? "600 " : "500 ") + (strong ? "12px" : "10px") + " 'Segoe UI', sans-serif";
+      const w = ctx.measureText(text).width + 12, h = strong ? 22 : 18;
+      ctx.fillStyle = "white"; ctx.strokeStyle = strong ? "#0c8770" : "#d4dfdb"; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.roundRect(x - w / 2, y - h / 2, w, h, 6); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = "#12231e"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(text, x, y + 1);
+    }
+
+    function pointInPolygon(pp, x, y) {
+      let inside = false;
+      for (let i = 0, j = pp.length - 1; i < pp.length; j = i++) {
+        const a = pp[i], b = pp[j];
+        if ((a[1] > y) !== (b[1] > y) && x < (b[0] - a[0]) * (y - a[1]) / (b[1] - a[1]) + a[0]) inside = !inside;
+      }
+      return inside;
+    }
+    function roomAt(x, y) {   // test upper floors first, they're drawn on top
+      for (let i = hit3d.length - 1; i >= 0; i--) if (pointInPolygon(hit3d[i].pp, x, y)) return hit3d[i].id;
+      return null;
+    }
+
+    // mouse: drag = rotate, wheel = zoom, click = select
+    let drag = null, moved = false;
+    cv.addEventListener("pointerdown", e => { drag = { x: e.clientX, y: e.clientY, yaw: V.yaw, pitch: V.pitch }; moved = false; cv.setPointerCapture(e.pointerId); cv.classList.add("dragging"); });
+    cv.addEventListener("pointermove", e => {
+      const r = cv.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
+      if (drag) {
+        const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+        if (Math.abs(dx) + Math.abs(dy) > 4) moved = true;
+        V.yaw = drag.yaw + dx * 0.008;
+        V.pitch = Math.min(1.4, Math.max(0.25, drag.pitch + dy * 0.004));
+        draw3D(); return;
+      }
+      const id = roomAt(mx, my);
+      if (id !== hoverId) { hoverId = id; draw3D(); }
+    });
+    cv.addEventListener("pointerup", e => {
+      cv.classList.remove("dragging");
+      if (drag && !moved) { const r = cv.getBoundingClientRect(); const id = roomAt(e.clientX - r.left, e.clientY - r.top); if (id) { selected = id; render(); } }
+      drag = null;
+    });
+    cv.addEventListener("pointerleave", () => { if (!drag && hoverId) { hoverId = null; draw3D(); } });
+    cv.addEventListener("wheel", e => { e.preventDefault(); V.zoom = Math.min(3, Math.max(0.5, V.zoom * (e.deltaY < 0 ? 1.1 : 0.9))); draw3D(); }, { passive: false });
+    new ResizeObserver(() => draw3D()).observe(cv);
+
+    // ================= Toolbar =================
+    document.getElementById("viewSeg").addEventListener("click", e => {
+      const b = e.target.closest("button"); if (!b) return;
+      viewMode = b.dataset.view;
+      document.querySelectorAll("#viewSeg button").forEach(x => x.classList.toggle("on", x === b));
+      document.getElementById("view3d").hidden = viewMode !== "3d";
+      document.getElementById("floors").hidden = viewMode !== "plan";
+      document.getElementById("hint").textContent = viewMode === "3d" ? "Drag to rotate · scroll to zoom · click a room" : "Click a room";
+      render();
+    });
+    document.getElementById("layerSeg").addEventListener("click", e => {
+      const b = e.target.closest("button"); if (!b) return;
+      layer = b.dataset.layer;
+      document.querySelectorAll("#layerSeg button").forEach(x => x.classList.toggle("on", x === b));
+      renderLegend(); render();
+    });
+
+    // ================= Update everything from the state =================
     function render() {
-      // 1. colour every room
       let alerts = 0;
       ROOMS.forEach(r => {
-        const s = state[r.id], online = isOnline(r.id);
-        const ppm = online ? s.data.co2_ppm : null;
-        if (ppm > 1000) alerts++;
+        if (isOnline(r.id) && state[r.id].data.co2_ppm > 1000) alerts++;
+        const info = layerInfo(r);
         const shape = document.getElementById("shape-" + r.id);
-        shape.setAttribute("fill", co2Fill(ppm));
+        shape.setAttribute("fill", info.fill);
         shape.classList.toggle("selected", r.id === selected);
-        document.getElementById("val-" + r.id).textContent =
-          online ? ppm + " ppm" : (s.last ? "offline" : "--");
+        document.getElementById("val-" + r.id).textContent = info.text;
       });
       document.getElementById("alerts").textContent = alerts + " rooms above 1,000 ppm";
+      draw3D();
 
-      // 2. fill the side panel for the selected room
-      const room = ROOMS.find(r => r.id === selected), s = state[selected], d = s.data;
-      const online = isOnline(selected);
+      // side panel
+      const room = ROOMS.find(r => r.id === selected), s = state[selected], d = s.data, online = isOnline(selected);
       document.getElementById("room-name").textContent = room.name;
       document.getElementById("room-meta").textContent =
-        FLOORS[room.floor] + " · " + room.w * room.d + " m²" +
-        (d && d.occupied != null ? " · " + d.occupied + " people" : "");
+        FLOORS[room.floor] + " · " + room.w * room.d + " m²" + (d && d.occupied != null ? " · " + d.occupied + " people" : "");
       document.getElementById("temp").textContent = d ? d.temp_C.toFixed(1) : "--";
       document.getElementById("hum").textContent  = d ? d.hum_pct.toFixed(0) : "--";
       document.getElementById("co2").textContent  = d ? d.co2_ppm : "--";
@@ -192,40 +447,30 @@
         `<polyline points="${points}" fill="none" stroke="#0c8770" stroke-width="2.5" vector-effect="non-scaling-stroke"/>`;
     }
 
-    // ================= MQTT: one subscription for the whole building =================
-    const conn = document.getElementById("conn");
-    const client = mqtt.connect(BROKER);
-
-    client.on("connect", () => {
-      conn.textContent = "● Connected";
-      client.subscribe(PREFIX + "/#");
-    });
-
-    client.on("message", (topic, payload) => {
-      const parts = topic.split("/");              // ["gridsense-dauemi", "c101", "state"]
-      let msg;
-      try { msg = JSON.parse(payload.toString()); } catch (e) { return; }
-
-      if (parts[1] === "sim") {                    // the simulator's clock
-        document.getElementById("clock").textContent = "Simulated time " + msg.time;
-        return;
-      }
-      const s = state[parts[1]];
-      if (!s) return;                              // a room we don't know
-
-      s.data = msg;
-      s.last = Date.now();
-      s.history.push(msg.co2_ppm);
-      if (s.history.length > MAX_POINTS) s.history.shift();
-    });
-
-    client.on("error", err => conn.textContent = "Error: " + err.message);
-    client.on("close", () => conn.textContent = "○ Disconnected");
-
-    // ================= Start =================
+    // ================= Start (before MQTT, so the page draws even offline) =================
     buildPlans();
+    renderLegend();
     render();
-    setInterval(render, 500);   // redraw twice a second (also acts as the watchdog)
+    setInterval(render, 500);
+
+    // ================= MQTT =================
+    const conn = document.getElementById("conn");
+    if (!window.mqtt) {
+      conn.textContent = "MQTT library failed to load";
+    } else {
+      const client = mqtt.connect(BROKER);
+      client.on("connect", () => { conn.textContent = "● Connected"; client.subscribe(PREFIX + "/#"); });
+      client.on("message", (topic, payload) => {
+        const parts = topic.split("/");
+        let msg; try { msg = JSON.parse(payload.toString()); } catch (e) { return; }
+        if (parts[1] === "sim") { document.getElementById("clock").textContent = "Simulated time " + msg.time; return; }
+        const s = state[parts[1]]; if (!s) return;
+        s.data = msg; s.last = Date.now();
+        s.history.push(msg.co2_ppm); if (s.history.length > MAX_POINTS) s.history.shift();
+      });
+      client.on("error", err => conn.textContent = "Error: " + err.message);
+      client.on("close", () => conn.textContent = "○ Disconnected");
+    }
   </script>
 </body>
 </html>
