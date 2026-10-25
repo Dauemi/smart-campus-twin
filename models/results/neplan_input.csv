@@ -1,0 +1,19 @@
+element,type,from,to,data
+External grid,"Slack, 20 kV, 1.0 pu",,MV bus,
+Transformer,630 kVA 20/0.4 kV,MV bus,LV busbar,"uk = 4 %, X/R = 5"
+Cable,NAYY 4x150 SE,LV busbar,Teaching,"150 m, R = 0.206 ohm/km, X = 0.08 ohm/km, Imax = 270 A"
+Cable,NAYY 4x150 SE,Teaching,Library,"150 m, R = 0.206 ohm/km, X = 0.08 ohm/km, Imax = 270 A"
+Cable,NAYY 4x150 SE,LV busbar,Residence,"200 m, R = 0.206 ohm/km, X = 0.08 ohm/km, Imax = 270 A"
+Cable,NAYY 4x150 SE,Residence,Sports hall,"250 m, R = 0.206 ohm/km, X = 0.08 ohm/km, Imax = 270 A"
+Cable,NAYY 4x150 SE,Sports hall,Car park,"150 m, R = 0.206 ohm/km, X = 0.08 ohm/km, Imax = 270 A"
+Load,cos phi 0.95,,Teaching,"A: 70 kW, B/C: 35 kW"
+PV (static generator),cos phi 1 (C: 0.90 absorbing),,Teaching,"36 kWp, A: 0 kW, B/C: 29 kW"
+Load,cos phi 0.95,,Library,"A: 45 kW, B/C: 20 kW"
+PV (static generator),cos phi 1 (C: 0.90 absorbing),,Library,"30 kWp, A: 0 kW, B/C: 24 kW"
+Load,cos phi 0.95,,Residence,"A: 120 kW, B/C: 25 kW"
+PV (static generator),cos phi 1 (C: 0.90 absorbing),,Residence,"60 kWp, A: 0 kW, B/C: 48 kW"
+Load,cos phi 0.95,,Sports hall,"A: 50 kW, B/C: 10 kW"
+PV (static generator),cos phi 1 (C: 0.90 absorbing),,Sports hall,"150 kWp, A: 0 kW, B/C: 120 kW"
+Load,cos phi 0.95,,Car park,"A: 60 kW, B/C: 15 kW"
+PV (static generator),cos phi 1 (C: 0.90 absorbing),,Car park,"100 kWp, A: 0 kW, B/C: 80 kW"
+Battery (scenario C only),load,,Sports hall,+80 kW charging

@@ -1,0 +1,19 @@
+scenario,bus,V_pu,V_LL_volts,P_kW,status
+A,LV busbar,0.9871,394.8586,0.0,ok
+A,Teaching,0.961,384.3893,70.0,ok
+A,Library,0.9507,380.2659,45.0,ok
+A,Residence,0.9116,364.6483,120.0,warning
+A,Sports hall,0.865,346.0015,50.0,VIOLATION
+A,Car park,0.8496,339.8497,60.0,VIOLATION
+B,LV busbar,0.9996,399.8325,0.0,ok
+B,Teaching,0.9978,399.1154,6.2,ok
+B,Library,0.9981,399.2269,-4.0,ok
+B,Residence,1.0441,417.6241,-23.0,ok
+B,Sports hall,1.0941,437.6541,-110.0,warning
+B,Car park,1.1051,442.0587,-65.0,VIOLATION
+C,LV busbar,0.9895,395.7978,0.0,ok
+C,Teaching,0.9857,394.2765,6.2,ok
+C,Library,0.9851,394.0329,-4.0,ok
+C,Residence,1.0029,401.1632,-23.0,ok
+C,Sports hall,1.0186,407.4482,-30.0,ok
+C,Car park,1.0276,411.0266,-65.0,ok

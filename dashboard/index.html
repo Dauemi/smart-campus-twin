@@ -18,7 +18,8 @@
     .seg button { border: 0; background: none; padding: 6px 12px; border-radius: 7px; cursor: pointer; font: inherit; font-size: 13px; color: #566a64; }
     .seg button.on { background: white; color: #12231e; font-weight: 600; box-shadow: 0 1px 3px rgb(0 0 0 / .12); }
     .hint { font-size: 12px; color: #566a64; }
-    [hidden] { display: none !important; }   /* make 'hidden' win over display:grid */
+    [hidden] { display: none !important; }
+    #gridSvg text { font-family: "Segoe UI", sans-serif; }   /* make 'hidden' win over display:grid */
 
     /* 2D floor plans */
     .floors { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
@@ -69,6 +70,7 @@
         <div class="seg" id="viewSeg">
           <button data-view="3d" class="on">3D view</button>
           <button data-view="plan">Floor plans</button>
+          <button data-view="grid">Campus grid</button>
         </div>
         <div class="seg" id="layerSeg">
           <button data-layer="spaces" class="on">Spaces</button>
@@ -81,6 +83,19 @@
 
       <div id="view3d"><canvas id="c3d"></canvas></div>
       <div class="floors" id="floors" hidden></div>
+
+      <!-- Campus grid: results of models/campus_loadflow.py, read from data/loadflow.json -->
+      <div id="gridView" hidden>
+        <div class="toolbar">
+          <div class="seg" id="scenSeg">
+            <button data-s="A" class="on">A · Winter evening</button>
+            <button data-s="B">B · Summer noon</button>
+            <button data-s="C">C · Summer noon + smart control</button>
+          </div>
+        </div>
+        <div style="overflow-x:auto"><svg id="gridSvg" viewBox="0 0 980 430" style="width:100%;min-width:640px;display:block"></svg></div>
+        <p class="hint" id="gridNote" style="max-width:70ch;font-size:13px;margin:8px 0 0"></p>
+      </div>
       <div class="legend" id="legend"></div>
     </div>
 
@@ -424,7 +439,13 @@
       document.querySelectorAll("#viewSeg button").forEach(x => x.classList.toggle("on", x === b));
       document.getElementById("view3d").hidden = viewMode !== "3d";
       document.getElementById("floors").hidden = viewMode !== "plan";
-      document.getElementById("hint").textContent = viewMode === "3d" ? "Drag to rotate · scroll to zoom · click a room" : "Click a room";
+      document.getElementById("gridView").hidden = viewMode !== "grid";
+      document.getElementById("layerSeg").hidden = viewMode === "grid";   // layers are about rooms, not the grid
+      document.getElementById("legend").hidden = viewMode === "grid";
+      document.getElementById("hint").textContent =
+        viewMode === "3d" ? "Drag to rotate · scroll to zoom · click a room" :
+        viewMode === "grid" ? "Campus low-voltage network · results from the Python load flow" : "Click a room";
+      if (viewMode === "grid") drawGrid();
       render();
     });
     document.getElementById("layerSeg").addEventListener("click", e => {
@@ -432,6 +453,84 @@
       layer = b.dataset.layer;
       document.querySelectorAll("#layerSeg button").forEach(x => x.classList.toggle("on", x === b));
       renderLegend(); render();
+    });
+
+    // ================= Campus grid (load-flow results) =================
+    // The Python script writes data/loadflow.json; we read it once with fetch().
+    let loadflow = null, scenario = "A";
+    fetch("data/loadflow.json")
+      .then(r => r.json())
+      .then(d => { loadflow = d; if (viewMode === "grid") drawGrid(); })
+      .catch(() => { loadflow = "missing"; });
+
+    // where each bus sits on the diagram (x is roughly proportional to cable length)
+    const GRID_POS = {
+      "LV busbar":   [190, 0],
+      "Teaching":    [370, 120], "Library":     [550, 120],
+      "Residence":   [430, 320], "Sports hall": [730, 320], "Car park":    [910, 320],
+    };
+    const GRID_NOTES = {
+      A: "Winter evening: high load, no sun. Voltage drops along feeder 2 to 85% at the car park, below the -10% limit, and the first cable carries 146% of its rating. Smart control of solar can't help here: it needs a second cable, a split feeder or EV charging moved out of the evening peak.",
+      B: "Summer noon: low load, full sun. Power flows backwards towards the transformer and the voltage rises along feeder 2 to 110.5% at the car park, above the +10% limit. This is the classic problem of decentralised solar.",
+      C: "Summer noon with smart control: the sports-hall battery charges from the surplus and the solar inverters absorb reactive power. The car park drops to 102.8%: the voltage problem is solved without new cables. These controls rely on devices communicating, which is the digitalisation layer of a smart grid.",
+    };
+    const vColor = st => st === "VIOLATION" ? "#bf3826" : st === "warning" ? "#e2a637" : "#0c8770";
+    const lColor = st => st === "OVERLOAD" ? "#bf3826" : st === "warning" ? "#e2a637" : "#0c8770";
+
+    function drawGrid() {
+      const svg = document.getElementById("gridSvg");
+      if (!loadflow) { svg.innerHTML = '<text x="20" y="40">Loading data/loadflow.json…</text>'; return; }
+      if (loadflow === "missing") {
+        svg.innerHTML = '<text x="20" y="40" fill="#bf3826">No load-flow data yet. Run: python models/campus_loadflow.py</text>'; return;
+      }
+      const sc = loadflow.scenarios[scenario];
+      const bus = Object.fromEntries(sc.buses.map(b => [b.bus, b]));
+      const line = Object.fromEntries(sc.lines.map(l => [l.to, l]));
+      const [bx] = GRID_POS["LV busbar"];
+      let out = "";
+
+      // transformer and busbar
+      out += `<line x1="40" y1="220" x2="${bx - 48}" y2="220" stroke="#12231e" stroke-width="2"/>
+              <circle cx="${bx - 70}" cy="220" r="18" fill="none" stroke="#12231e" stroke-width="2"/>
+              <circle cx="${bx - 48}" cy="220" r="18" fill="none" stroke="#12231e" stroke-width="2"/>
+              <text x="${bx - 60}" y="262" text-anchor="middle" font-size="12" fill="#566a64">630 kVA</text>
+              <text x="${bx - 60}" y="277" text-anchor="middle" font-size="12" fill="#566a64">20/0.4 kV</text>
+              <text x="40" y="208" font-size="12" fill="#566a64">20 kV grid</text>
+              <line x1="${bx}" y1="90" x2="${bx}" y2="350" stroke="#12231e" stroke-width="6" stroke-linecap="round"/>
+              <line x1="${bx - 30}" y1="220" x2="${bx}" y2="220" stroke="#12231e" stroke-width="2"/>
+              <text x="${bx}" y="378" text-anchor="middle" font-size="12" fill="#566a64">LV busbar ${(bus["LV busbar"].V_pu * 100).toFixed(1)}%</text>`;
+
+      // cables: colour = loading, arrow = direction of power flow
+      loadflow.network.filter(n => n.parent).forEach(n => {
+        const [x1, y1] = n.parent === "LV busbar" ? [bx, GRID_POS[n.bus][1]] : GRID_POS[n.parent];
+        const [x2, y2] = GRID_POS[n.bus], l = line[n.bus], c = lColor(l.status);
+        const back = l.direction.startsWith("BACK"), mx = (x1 + x2) / 2;
+        out += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${c}" stroke-width="${3 + l.loading_pct / 20}" stroke-linecap="round"/>
+                <text x="${mx}" y="${y1 - 14}" text-anchor="middle" font-size="13" font-weight="600" fill="${c}">${l.loading_pct.toFixed(0)}% · ${l.I_A.toFixed(0)} A</text>
+                <text x="${mx}" y="${y1 + 24}" text-anchor="middle" font-size="16" fill="${c}">${back ? "◀" : "▶"}</text>
+                <text x="${mx}" y="${y1 + 40}" text-anchor="middle" font-size="11" fill="#566a64">${n.length_m} m</text>`;
+      });
+
+      // buildings: dot colour = voltage, text = voltage and net power
+      Object.entries(GRID_POS).forEach(([name, [x, y]]) => {
+        if (name === "LV busbar") return;
+        const b = bus[name], pv = loadflow.buildings[name].pv_kwp, c = vColor(b.status);
+        const flow = b.P_kW >= 0 ? `uses ${b.P_kW.toFixed(0)} kW` : `exports ${(-b.P_kW).toFixed(0)} kW`;
+        out += `<circle cx="${x}" cy="${y}" r="14" fill="${c}" stroke="white" stroke-width="3"/>
+                <text x="${x}" y="${y - 52}" text-anchor="middle" font-size="14" font-weight="700" fill="#12231e">${name}</text>
+                <text x="${x}" y="${y - 34}" text-anchor="middle" font-size="12" fill="#566a64">☀ ${pv} kWp · ${flow}</text>
+                <text x="${x}" y="${y + 62}" text-anchor="middle" font-size="15" font-weight="700" fill="${c}">${(b.V_pu * 100).toFixed(1)}%</text>
+                <text x="${x}" y="${y + 78}" text-anchor="middle" font-size="11" fill="#566a64">${b.V_LL.toFixed(0)} V · ${b.status}</text>`;
+      });
+      out += `<text x="40" y="415" font-size="11" fill="#566a64">Voltage limits ±10% (EN 50160) · cable NAYY 4x150, 270 A · line width = loading · ▶ power to building, ◀ power back to transformer</text>`;
+      svg.innerHTML = out;
+      document.getElementById("gridNote").textContent = GRID_NOTES[scenario];
+    }
+    document.getElementById("scenSeg").addEventListener("click", e => {
+      const b = e.target.closest("button"); if (!b) return;
+      scenario = b.dataset.s;
+      document.querySelectorAll("#scenSeg button").forEach(x => x.classList.toggle("on", x === b));
+      drawGrid();
     });
 
     // ================= Update everything from the state =================

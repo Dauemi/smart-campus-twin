@@ -1,0 +1,322 @@
+{
+  "limits": {
+    "v_max": 1.1,
+    "v_min": 0.9,
+    "v_warn": 1.05,
+    "cable_imax_A": 270
+  },
+  "transformer_kva": 630,
+  "network": [
+    {
+      "bus": "LV busbar",
+      "parent": null,
+      "length_m": 0
+    },
+    {
+      "bus": "Teaching",
+      "parent": "LV busbar",
+      "length_m": 150
+    },
+    {
+      "bus": "Library",
+      "parent": "Teaching",
+      "length_m": 150
+    },
+    {
+      "bus": "Residence",
+      "parent": "LV busbar",
+      "length_m": 200
+    },
+    {
+      "bus": "Sports hall",
+      "parent": "Residence",
+      "length_m": 250
+    },
+    {
+      "bus": "Car park",
+      "parent": "Sports hall",
+      "length_m": 150
+    }
+  ],
+  "buildings": {
+    "Teaching": {
+      "load_winter": 70,
+      "load_summer": 35,
+      "pv_kwp": 36
+    },
+    "Library": {
+      "load_winter": 45,
+      "load_summer": 20,
+      "pv_kwp": 30
+    },
+    "Residence": {
+      "load_winter": 120,
+      "load_summer": 25,
+      "pv_kwp": 60
+    },
+    "Sports hall": {
+      "load_winter": 50,
+      "load_summer": 10,
+      "pv_kwp": 150
+    },
+    "Car park": {
+      "load_winter": 60,
+      "load_summer": 15,
+      "pv_kwp": 100
+    }
+  },
+  "scenarios": {
+    "A": {
+      "name": "A. Winter evening peak",
+      "buses": [
+        {
+          "bus": "LV busbar",
+          "V_pu": 0.9871,
+          "V_LL": 394.9,
+          "P_kW": 0.0,
+          "status": "ok"
+        },
+        {
+          "bus": "Teaching",
+          "V_pu": 0.961,
+          "V_LL": 384.4,
+          "P_kW": 70.0,
+          "status": "ok"
+        },
+        {
+          "bus": "Library",
+          "V_pu": 0.9507,
+          "V_LL": 380.3,
+          "P_kW": 45.0,
+          "status": "ok"
+        },
+        {
+          "bus": "Residence",
+          "V_pu": 0.9116,
+          "V_LL": 364.6,
+          "P_kW": 120.0,
+          "status": "warning"
+        },
+        {
+          "bus": "Sports hall",
+          "V_pu": 0.865,
+          "V_LL": 346.0,
+          "P_kW": 50.0,
+          "status": "VIOLATION"
+        },
+        {
+          "bus": "Car park",
+          "V_pu": 0.8496,
+          "V_LL": 339.8,
+          "P_kW": 60.0,
+          "status": "VIOLATION"
+        }
+      ],
+      "lines": [
+        {
+          "to": "Teaching",
+          "I_A": 182.6,
+          "loading_pct": 67.6,
+          "direction": "towards building",
+          "status": "ok"
+        },
+        {
+          "to": "Library",
+          "I_A": 71.9,
+          "loading_pct": 26.6,
+          "direction": "towards building",
+          "status": "ok"
+        },
+        {
+          "to": "Residence",
+          "I_A": 395.1,
+          "loading_pct": 146.3,
+          "direction": "towards building",
+          "status": "OVERLOAD"
+        },
+        {
+          "to": "Sports hall",
+          "I_A": 195.1,
+          "loading_pct": 72.3,
+          "direction": "towards building",
+          "status": "ok"
+        },
+        {
+          "to": "Car park",
+          "I_A": 107.3,
+          "loading_pct": 39.7,
+          "direction": "towards building",
+          "status": "ok"
+        }
+      ]
+    },
+    "B": {
+      "name": "B. Summer noon",
+      "buses": [
+        {
+          "bus": "LV busbar",
+          "V_pu": 0.9996,
+          "V_LL": 399.8,
+          "P_kW": 0.0,
+          "status": "ok"
+        },
+        {
+          "bus": "Teaching",
+          "V_pu": 0.9978,
+          "V_LL": 399.1,
+          "P_kW": 6.2,
+          "status": "ok"
+        },
+        {
+          "bus": "Library",
+          "V_pu": 0.9981,
+          "V_LL": 399.2,
+          "P_kW": -4.0,
+          "status": "ok"
+        },
+        {
+          "bus": "Residence",
+          "V_pu": 1.0441,
+          "V_LL": 417.6,
+          "P_kW": -23.0,
+          "status": "ok"
+        },
+        {
+          "bus": "Sports hall",
+          "V_pu": 1.0941,
+          "V_LL": 437.7,
+          "P_kW": -110.0,
+          "status": "warning"
+        },
+        {
+          "bus": "Car park",
+          "V_pu": 1.1051,
+          "V_LL": 442.1,
+          "P_kW": -65.0,
+          "status": "VIOLATION"
+        }
+      ],
+      "lines": [
+        {
+          "to": "Teaching",
+          "I_A": 26.4,
+          "loading_pct": 9.8,
+          "direction": "towards building",
+          "status": "ok"
+        },
+        {
+          "to": "Library",
+          "I_A": 11.1,
+          "loading_pct": 4.1,
+          "direction": "BACK to transformer",
+          "status": "ok"
+        },
+        {
+          "to": "Residence",
+          "I_A": 262.9,
+          "loading_pct": 97.4,
+          "direction": "BACK to transformer",
+          "status": "warning"
+        },
+        {
+          "to": "Sports hall",
+          "I_A": 230.2,
+          "loading_pct": 85.3,
+          "direction": "BACK to transformer",
+          "status": "warning"
+        },
+        {
+          "to": "Car park",
+          "I_A": 85.1,
+          "loading_pct": 31.5,
+          "direction": "BACK to transformer",
+          "status": "ok"
+        }
+      ]
+    },
+    "C": {
+      "name": "C. Summer noon + smart control",
+      "buses": [
+        {
+          "bus": "LV busbar",
+          "V_pu": 0.9895,
+          "V_LL": 395.8,
+          "P_kW": 0.0,
+          "status": "ok"
+        },
+        {
+          "bus": "Teaching",
+          "V_pu": 0.9857,
+          "V_LL": 394.3,
+          "P_kW": 6.2,
+          "status": "ok"
+        },
+        {
+          "bus": "Library",
+          "V_pu": 0.9851,
+          "V_LL": 394.0,
+          "P_kW": -4.0,
+          "status": "ok"
+        },
+        {
+          "bus": "Residence",
+          "V_pu": 1.0029,
+          "V_LL": 401.2,
+          "P_kW": -23.0,
+          "status": "ok"
+        },
+        {
+          "bus": "Sports hall",
+          "V_pu": 1.0186,
+          "V_LL": 407.4,
+          "P_kW": -30.0,
+          "status": "ok"
+        },
+        {
+          "bus": "Car park",
+          "V_pu": 1.0276,
+          "V_LL": 411.0,
+          "P_kW": -65.0,
+          "status": "ok"
+        }
+      ],
+      "lines": [
+        {
+          "to": "Teaching",
+          "I_A": 64.0,
+          "loading_pct": 23.7,
+          "direction": "towards building",
+          "status": "ok"
+        },
+        {
+          "to": "Library",
+          "I_A": 27.3,
+          "loading_pct": 10.1,
+          "direction": "BACK to transformer",
+          "status": "ok"
+        },
+        {
+          "to": "Residence",
+          "I_A": 256.2,
+          "loading_pct": 94.9,
+          "direction": "BACK to transformer",
+          "status": "warning"
+        },
+        {
+          "to": "Sports hall",
+          "I_A": 200.1,
+          "loading_pct": 74.1,
+          "direction": "BACK to transformer",
+          "status": "ok"
+        },
+        {
+          "to": "Car park",
+          "I_A": 110.0,
+          "loading_pct": 40.7,
+          "direction": "BACK to transformer",
+          "status": "ok"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,16 @@
+scenario,cable,to_bus,length_m,I_A,loading_pct,direction,status
+A,LV busbar -> Teaching,Teaching,150,182.59,67.63,towards building,ok
+A,Teaching -> Library,Library,150,71.92,26.64,towards building,ok
+A,LV busbar -> Residence,Residence,200,395.11,146.34,towards building,OVERLOAD
+A,Residence -> Sports hall,Sports hall,250,195.12,72.27,towards building,ok
+A,Sports hall -> Car park,Car park,150,107.3,39.74,towards building,ok
+B,LV busbar -> Teaching,Teaching,150,26.35,9.76,towards building,ok
+B,Teaching -> Library,Library,150,11.13,4.12,BACK to transformer,ok
+B,LV busbar -> Residence,Residence,200,262.92,97.38,BACK to transformer,warning
+B,Residence -> Sports hall,Sports hall,250,230.24,85.28,BACK to transformer,warning
+B,Sports hall -> Car park,Car park,150,85.14,31.53,BACK to transformer,ok
+C,LV busbar -> Teaching,Teaching,150,64.04,23.72,towards building,ok
+C,Teaching -> Library,Library,150,27.3,10.11,BACK to transformer,ok
+C,LV busbar -> Residence,Residence,200,256.16,94.87,BACK to transformer,warning
+C,Residence -> Sports hall,Sports hall,250,200.13,74.12,BACK to transformer,ok
+C,Sports hall -> Car park,Car park,150,110.0,40.74,BACK to transformer,ok
